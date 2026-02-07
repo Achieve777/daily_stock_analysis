@@ -380,7 +380,7 @@ def main() -> int:
     if args.webui_only:
         args.serve_only = True
 
-    # 兼容旧版 WEBUI_ENABLED 环境变量
+    # 兼容旧版 WEBUI_ENABLED 环境的变量
     if config.webui_enabled and not (args.serve or args.serve_only):
         args.serve = True
 
