@@ -581,17 +581,27 @@ class GeminiAnalyzer:
         配置：
         - 使用 gemini-3-flash-preview 或 gemini-2.5-flash 模型
         - 不启用 Google Search（使用外部 Tavily/SerpAPI 搜索）
+        - 支持自定义 Base URL（用于第三方兼容 API）
         """
         try:
             import google.generativeai as genai
 
-            # 配置 API Key
-            genai.configure(api_key=self._api_key)
-
-            # 从配置获取模型名称
+            # 从配置获取设置
             config = get_config()
             model_name = config.gemini_model
             fallback_model = config.gemini_model_fallback
+
+            # 配置 API Key 和 Base URL
+            configure_kwargs = {"api_key": self._api_key}
+
+            # 如果配置了自定义 Base URL，则使用它
+            if config.gemini_base_url:
+                configure_kwargs["client_options"] = {
+                    "api_endpoint": config.gemini_base_url
+                }
+                logger.info(f"使用自定义 Gemini API Base URL: {config.gemini_base_url}")
+
+            genai.configure(**configure_kwargs)
 
             # 不再使用 Google Search Grounding（已知有兼容性问题）
             # 改为使用外部搜索服务（Tavily/SerpAPI）预先获取新闻
@@ -631,6 +641,14 @@ class GeminiAnalyzer:
             import google.generativeai as genai
             config = get_config()
             fallback_model = config.gemini_model_fallback
+
+            # 重新配置 genai (确保使用正确的 base_url)
+            configure_kwargs = {"api_key": self._api_key}
+            if config.gemini_base_url:
+                configure_kwargs["client_options"] = {
+                    "api_endpoint": config.gemini_base_url
+                }
+            genai.configure(**configure_kwargs)
 
             logger.warning(f"[LLM] 切换到备选模型: {fallback_model}")
             self._model = genai.GenerativeModel(
