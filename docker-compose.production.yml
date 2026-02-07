@@ -1,0 +1,134 @@
+# ===================================
+# 股票智能分析系统 - 生产环境 Docker Compose 配置
+# ===================================
+#
+# 使用方式:
+#   1. 复制 .env.example 为 .env 并配置环境变量
+#   2. 启动服务: docker-compose up -d
+#   3. 查看日志: docker-compose logs -f
+#   4. 停止服务: docker-compose down
+#
+# 服务模式:
+#   - analyzer: 定时分析模式（每日定时执行股票分析）
+#   - server: Web API 服务模式（提供 Web UI 和 API 接口）
+#
+
+version: '3.8'
+
+services:
+  # ==========================================
+  # 定时分析服务
+  # ==========================================
+  analyzer:
+    image: ghcr.io/${GITHUB_REPOSITORY:-zhulinsen/daily_stock_analysis}:latest
+    container_name: stock-analyzer
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - LOG_DIR=/app/logs
+      - DATABASE_PATH=/app/data/stock_analysis.db
+      # 启用定时任务
+      - SCHEDULE_ENABLED=true
+      - SCHEDULE_TIME=${SCHEDULE_TIME:-18:00}
+      - MARKET_REVIEW_ENABLED=${MARKET_REVIEW_ENABLED:-true}
+
+    volumes:
+      # 持久化数据
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      # 环境变量文件
+      - ./.env:/app/.env:ro
+
+    command: ["python", "main.py", "--schedule"]
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ==========================================
+  # Web API 服务
+  # ==========================================
+  server:
+    image: ghcr.io/${GITHUB_REPOSITORY:-zhulinsen/daily_stock_analysis}:latest
+    container_name: stock-server
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    environment:
+      - TZ=Asia/Shanghai
+      - PYTHONUNBUFFERED=1
+      - LOG_DIR=/app/logs
+      - DATABASE_PATH=/app/data/stock_analysis.db
+      # API 服务配置
+      - WEBUI_ENABLED=true
+      - WEBUI_HOST=0.0.0.0
+      - WEBUI_PORT=${WEBUI_PORT:-8000}
+
+    volumes:
+      # 持久化数据
+      - ./data:/app/data
+      - ./logs:/app/logs
+      - ./reports:/app/reports
+      # 环境变量文件
+      - ./.env:/app/.env:ro
+
+    ports:
+      - "${WEBUI_PORT:-8000}:${WEBUI_PORT:-8000}"
+
+    command: ["python", "main.py", "--webui-only", "--host", "0.0.0.0", "--port", "${WEBUI_PORT:-8000}"]
+
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:${WEBUI_PORT:-8000}/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+# ==========================================
+# 数据卷（可选：使用命名卷代替绑定挂载）
+# ==========================================
+# volumes:
+#   stock-data:
+#   stock-logs:
+#   stock-reports:
